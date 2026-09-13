@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:latest
+    container_name: postgres
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: conan
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: conan_db
+    networks:
+      - app-network
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -q -d conan_db -U conan']
+      interval: 10s
+      timeout: 20s
+      retries: 10
+
+  backend:
+    image: conan-backend:latest
+    container_name: backend
+    build:
+      context: ./backend
+    ports:
+      - '8001:8001'
+    environment:
+      NODE_ENV: development
+      FRONTEND_ORIGIN: http://localhost:8000
+      PORT: 8001
+    volumes:
+      - ./backend:/app/backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ['npx', 'nodemon', 'index.js']
+    networks:
+      - app-network
+
+  frontend:
+    image: conan-frontend:latest
+    container_name: frontend
+    build:
+      context: ./frontend
+    ports:
+      - '8000:8000'
+    environment:
+      NODE_ENV: development
+      PORT: 8000
+      CHOKIDAR_USEPOLLING: 'true'
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app/frontend
+    # command: ["npm", "run", "dev"]
+    networks:
+      - app-network
+
+networks:
+  app-network:

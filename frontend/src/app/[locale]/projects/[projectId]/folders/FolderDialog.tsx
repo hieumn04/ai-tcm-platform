@@ -1,0 +1,147 @@
+'use client'
+import React from 'react'
+import { useState, useEffect } from 'react'
+import {
+  Button,
+  Input,
+  Textarea,
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+} from '@nextui-org/react'
+import { FolderType, FoldersMessages } from '@/types/folder'
+
+type Props = {
+  isOpen: boolean
+  editingFolder: FolderType | null
+  onCancel: () => void
+  onSubmit: (name: string, detail: string) => void
+  messages: FoldersMessages
+}
+
+export default function FolderDialog({
+  isOpen,
+  editingFolder,
+  onCancel,
+  onSubmit,
+  messages,
+}: Props) {
+  const [folderName, setFolderName] = useState({
+    text: editingFolder ? editingFolder.name : '',
+    isValid: false,
+    errorMessage: '',
+  })
+
+  const [folderDetail, setFolderDetail] = useState({
+    text: editingFolder ? editingFolder.detail : '',
+    isValid: false,
+    errorMessage: '',
+  })
+
+  useEffect(() => {
+    if (editingFolder) {
+      setFolderName({
+        ...folderName,
+        text: editingFolder.name,
+      })
+
+      setFolderDetail({
+        ...folderDetail,
+        text: editingFolder.detail ? editingFolder.detail : '',
+      })
+    } else {
+      setFolderName({
+        ...folderName,
+        text: '',
+      })
+
+      setFolderDetail({
+        ...folderDetail,
+        text: '',
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingFolder])
+
+  const clear = () => {
+    setFolderName({
+      isValid: false,
+      text: '',
+      errorMessage: '',
+    })
+    setFolderDetail({
+      isValid: false,
+      text: '',
+      errorMessage: '',
+    })
+  }
+
+  const validate = () => {
+    const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/g // Regex for detecting URLs
+
+    if (!folderName.text) {
+      setFolderName({
+        ...folderName,
+        isValid: true,
+        errorMessage: messages.pleaseEnter,
+      })
+      return
+    }
+
+    onSubmit(folderName.text, folderDetail.text || '')
+    clear()
+  }
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onOpenChange={() => {
+        onCancel()
+      }}
+    >
+      <ModalContent>
+        <ModalHeader className="flex flex-col gap-1">
+          {messages.folder}
+        </ModalHeader>
+        <ModalBody>
+          <Input
+            type="text"
+            label={messages.folderName}
+            value={folderName.text}
+            isInvalid={folderName.isValid}
+            errorMessage={folderName.errorMessage}
+            onChange={(e) => {
+              setFolderName({
+                ...folderName,
+                text: e.target.value,
+              })
+            }}
+          />
+          <Textarea
+            label={messages.folderDetail}
+            placeholder="Optional folder description or link (e.g., https://example.com)"
+            value={folderDetail.text}
+            isInvalid={folderDetail.isValid}
+            errorMessage={folderDetail.errorMessage}
+            onChange={(e) => {
+              setFolderDetail({
+                ...folderDetail,
+                text: e.target.value,
+              })
+            }}
+          />
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="light" onClick={onCancel}>
+            {messages.close}
+          </Button>
+          <Button color="primary" onClick={validate}>
+            {editingFolder ? messages.update : messages.create}
+          </Button>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
+  )
+}

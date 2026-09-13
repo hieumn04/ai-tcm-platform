@@ -1,0 +1,25 @@
+{
+  "name": "unittcms",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "format": "prettier --write ./**/*.{js,ts,tsx,json,md,css,yaml}",
+    "test": "vitest",
+    "coverage": "vitest run --coverage",
+    "e2e": "playwright test",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.2",
+    "@types/node": "^22.8.1",
+    "@vitest/coverage-v8": "^3.1.4",
+    "express": "^4.21.0",
+    "prettier": "^3.5.3",
+    "sequelize": "^6.37.4",
+    "supertest": "^7.0.0",
+    "vitest": "^3.1.4"
+  },
+  "dependencies": {
+    "socket.io-client": "^4.8.1"
+  }
+}

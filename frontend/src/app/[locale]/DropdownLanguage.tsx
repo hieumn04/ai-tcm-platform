@@ -1,0 +1,43 @@
+'use client'
+import {
+  Button,
+  DropdownTrigger,
+  Dropdown,
+  DropdownMenu,
+  DropdownItem,
+} from '@nextui-org/react'
+import { Globe, ChevronDown } from 'lucide-react'
+import { locales } from '@/config/selection'
+import { LocaleCodeType } from '@/types/locale'
+
+type Props = {
+  locale: LocaleCodeType
+  onChangeLocale: (code: LocaleCodeType) => void
+}
+
+export default function DropdownLanguage({ locale, onChangeLocale }: Props) {
+  return (
+    <Dropdown>
+      <DropdownTrigger>
+        <Button
+          size="sm"
+          variant="light"
+          startContent={<Globe size={16} />}
+          endContent={<ChevronDown size={16} />}
+        >
+          {locales.find((entry) => entry.code === locale)?.name || locale}
+        </Button>
+      </DropdownTrigger>
+      <DropdownMenu aria-label="lacales">
+        {locales.map((entry) => (
+          <DropdownItem
+            key={entry.code}
+            onClick={() => onChangeLocale(entry.code)}
+          >
+            {entry.name}
+          </DropdownItem>
+        ))}
+      </DropdownMenu>
+    </Dropdown>
+  )
+}
