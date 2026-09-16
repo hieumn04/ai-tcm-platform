@@ -64,10 +64,11 @@ export default function TestCaseDetailDialog({
       try {
         const data = await fetchCase(context.token.access_token, caseId)
 
-        if (data.Steps?.length > 0) {
-          data.Steps.sort(
-            (a: StepType, b: StepType) =>
-              a.caseSteps.stepNo - b.caseSteps.stepNo,
+        const stepsList = (data as any).Steps || (data as any).steps
+        if (Array.isArray(stepsList) && stepsList.length > 0) {
+          stepsList.sort(
+            (a: any, b: any) =>
+              (a?.caseSteps?.stepNo ?? a?.stepNo ?? 0) - (b?.caseSteps?.stepNo ?? b?.stepNo ?? 0),
           )
         }
 
@@ -83,37 +84,45 @@ export default function TestCaseDetailDialog({
     fetchData()
   }, [context, caseId, toastContext])
 
+  const stepsList = (testCase as any)?.Steps || (testCase as any)?.steps
+  const hasStepObjects = Array.isArray(stepsList) && stepsList.length > 0
+  const hasStepsDetailText = Boolean(testCase.stepsDetail && testCase.stepsDetail.trim())
+
   const renderTextTemplate = () => (
     <>
       <p className="font-bold mt-2">{messages.testDetail}</p>
+      {testCase.preConditions && (
+        <div className="flex gap-2 my-2">
+          <Textarea
+            isReadOnly
+            size="sm"
+            variant="flat"
+            label={<span className="font-bold">{messages.preconditions}</span>}
+            value={testCase.preConditions}
+          />
+        </div>
+      )}
       <div className="flex gap-2 my-2">
-        <Textarea
-          isReadOnly
-          size="sm"
-          variant="flat"
-          label={<span className="font-bold">{messages.preconditions}</span>}
-          value={testCase.preConditions}
-        />
-      </div>
-      <div className="flex gap-2 my-2">
-        <div className="w-1/2">
+        <div className={testCase.expectedResults ? "w-1/2" : "w-full"}>
           <Textarea
             isReadOnly
             size="sm"
             variant="flat"
             label={<span className="font-bold">{messages.steps}</span>}
-            value={testCase.stepsDetail}
+            value={testCase.stepsDetail || 'No detailed steps provided.'}
           />
         </div>
-        <div className="w-1/2">
-          <Textarea
-            isReadOnly
-            size="sm"
-            variant="flat"
-            label={<span className="font-bold">{messages.expectedResult}</span>}
-            value={testCase.expectedResults}
-          />
-        </div>
+        {testCase.expectedResults && (
+          <div className="w-1/2">
+            <Textarea
+              isReadOnly
+              size="sm"
+              variant="flat"
+              label={<span className="font-bold">{messages.expectedResult}</span>}
+              value={testCase.expectedResults}
+            />
+          </div>
+        )}
       </div>
     </>
   )
@@ -121,35 +130,42 @@ export default function TestCaseDetailDialog({
   const renderStepsTemplate = () => (
     <>
       <p className="font-bold mt-2">{messages.steps}</p>
-      {testCase.Steps?.map((step) => (
-        <div key={step.id} className="flex items-center my-1">
-          <Avatar
-            className="me-2"
-            size="sm"
-            name={step.caseSteps.stepNo.toString()}
-          />
-          <div className="grow flex gap-2">
-            <div className="w-1/2">
-              <Textarea
-                isReadOnly
-                size="sm"
-                variant="flat"
-                label={messages.detailsOfTheStep}
-                value={step.step}
-              />
-            </div>
-            <div className="w-1/2">
-              <Textarea
-                isReadOnly
-                size="sm"
-                variant="flat"
-                label={messages.expectedResult}
-                value={step.result}
-              />
+      {stepsList.map((step: any, index: number) => {
+        const stepNum = step?.caseSteps?.stepNo ?? step?.stepNo ?? (index + 1)
+        const stepText = step?.step || step?.text || step?.detailsOfTheStep || ''
+        const resultText = step?.result || step?.expectedResult || ''
+        return (
+          <div key={step.id || index} className="flex items-center my-1">
+            <Avatar
+              className="me-2"
+              size="sm"
+              name={String(stepNum)}
+            />
+            <div className="grow flex gap-2">
+              <div className={resultText ? "w-1/2" : "w-full"}>
+                <Textarea
+                  isReadOnly
+                  size="sm"
+                  variant="flat"
+                  label={messages.detailsOfTheStep}
+                  value={stepText}
+                />
+              </div>
+              {resultText && (
+                <div className="w-1/2">
+                  <Textarea
+                    isReadOnly
+                    size="sm"
+                    variant="flat"
+                    label={messages.expectedResult}
+                    value={resultText}
+                  />
+                </div>
+              )}
             </div>
           </div>
-        </div>
-      ))}
+        )
+      })}
     </>
   )
 
@@ -172,11 +188,11 @@ export default function TestCaseDetailDialog({
 
         <ModalBody className={MODAL_BODY_BORDER}>
           <p className="font-bold mt-2">
-            {testCaseMessages.createdBy} {testCase.user?.email}
+            {testCaseMessages.createdBy} {testCase.user?.email || 'N/A'}
           </p>
           <p className="font-bold mt-2">{testCaseMessages.description}</p>
           <div className="break-words max-w-full overflow-hidden whitespace-pre-line max-h-[120px] overflow-y-auto">
-            {testCase.description}
+            {testCase.description || 'No description available'}
           </div>
         </ModalBody>
 
@@ -234,9 +250,9 @@ export default function TestCaseDetailDialog({
         )}
 
         <ModalBody>
-          {templates[testCase.template]?.uid === 'text'
-            ? renderTextTemplate()
-            : renderStepsTemplate()}
+          {hasStepObjects
+            ? renderStepsTemplate()
+            : renderTextTemplate()}
         </ModalBody>
       </ModalContent>
     </Modal>

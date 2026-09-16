@@ -904,6 +904,13 @@ export default function CasesPane({
     setIsAddTestCasesIntoRunConfirmDialogOpen(false)
   }
 
+  const handleRefresh = useCallback(async () => {
+    prevFetchParams.current.lastFetchId = ''
+    setIsFetching(false)
+    await fetchData(page, searchTerm, sortColumn, sortDirection)
+    toastContext.showToast('Test cases reloaded successfully!', 'success', 2000)
+  }, [fetchData, page, searchTerm, sortColumn, sortDirection, toastContext])
+
   return (
     <>
       <TestCaseTable
@@ -940,6 +947,7 @@ export default function CasesPane({
         sortDirection={sortDirection}
         onSortChange={handleSortChange}
         onResetFilters={resetAllFilters}
+        onRefresh={handleRefresh}
       />
 
       <AiGenerateCaseDialog

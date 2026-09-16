@@ -75,6 +75,168 @@ export async function generateTestCasesWithAi(
 }
 
 /**
+ * Stream test case generation from DeepSeek via SSE
+ */
+export async function streamGenerateTestCasesWithAi(
+  jwt: string,
+  folderId: number,
+  prompt: string,
+  language: 'vi' | 'en' | 'ja' = 'en',
+  image: string | null | undefined,
+  onChunk: (chunk: string) => void,
+  signal?: AbortSignal,
+): Promise<string> {
+  // Use direct backend origin to bypass Next.js rewrites proxy buffering SSE
+  const backendBase =
+    typeof window !== 'undefined' && process.env.NEXT_PUBLIC_BACKEND_ORIGIN
+      ? process.env.NEXT_PUBLIC_BACKEND_ORIGIN
+      : apiServer;
+  const url = `${backendBase}/ai/generate-stream`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${jwt}`,
+    },
+    body: JSON.stringify({ folderId, prompt, language, image }),
+    signal,
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || `Streaming error: ${response.status}`);
+  }
+
+  if (!response.body) {
+    throw new Error('ReadableStream not supported by response');
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let fullRawText = '';
+  let sseBuffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    sseBuffer += decoder.decode(value, { stream: true });
+    const lines = sseBuffer.split('\n');
+    sseBuffer = lines.pop() || '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith(':')) continue;
+
+      if (trimmed.startsWith('data: ')) {
+        const payload = trimmed.slice(6).trim();
+        if (payload === '[DONE]') {
+          continue;
+        }
+
+        try {
+          const parsed = JSON.parse(payload);
+          if (parsed.error) {
+            throw new Error(parsed.error);
+          }
+          if (parsed.text) {
+            fullRawText += parsed.text;
+            onChunk(parsed.text);
+          }
+        } catch (e: any) {
+          if (e.message && !e.message.includes('JSON')) {
+            throw e;
+          }
+        }
+      }
+    }
+  }
+
+  return fullRawText;
+}
+
+/**
+ * Validate and parse raw AI response string into structured GeneratedCaseData[]
+ * (Point 7 from Architecture Review: strict schema validation)
+ */
+export function validateAndParseTestSuite(rawText: string): GeneratedCaseData[] {
+  if (!rawText || typeof rawText !== 'string' || !rawText.trim()) {
+    throw new Error('Empty AI response received');
+  }
+
+  let cleanJson = rawText.trim();
+  const jsonBlockMatch = cleanJson.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  if (jsonBlockMatch && jsonBlockMatch[1]) {
+    cleanJson = jsonBlockMatch[1].trim();
+  } else {
+    const firstBrace = cleanJson.indexOf('{');
+    const lastBrace = cleanJson.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      cleanJson = cleanJson.substring(firstBrace, lastBrace + 1);
+    }
+  }
+
+  let parsed: any;
+  try {
+    parsed = JSON.parse(cleanJson);
+  } catch (parseErr: any) {
+    console.error('Failed to parse AI JSON:', cleanJson);
+    throw new Error(`Invalid JSON syntax from AI: ${parseErr.message}`);
+  }
+
+  const rawList = Array.isArray(parsed.testCases)
+    ? parsed.testCases
+    : Array.isArray(parsed)
+    ? parsed
+    : [parsed];
+
+  if (rawList.length === 0) {
+    throw new Error('No test case scenarios found in AI output');
+  }
+
+  const validatedCases: GeneratedCaseData[] = rawList.map((item: any, idx: number) => {
+    if (!item || typeof item !== 'object') {
+      throw new Error(`Test case item at index ${idx + 1} is invalid`);
+    }
+
+    const title = item.title && typeof item.title === 'string' ? item.title.trim() : `Test Case ${idx + 1}`;
+    const description = item.description || '';
+    const preConditions = item.preConditions || '';
+    const expectedResults = item.expectedResults || '';
+    const priority = typeof item.priority === 'number' && item.priority >= 0 && item.priority <= 3 ? item.priority : 1;
+    const type = typeof item.type === 'number' && item.type >= 0 && item.type <= 12 ? item.type : 4;
+    const complexity = ['1', '2', '3'].includes(String(item.complexity)) ? (String(item.complexity) as any) : '2';
+
+    const steps = Array.isArray(item.steps)
+      ? item.steps.map((s: any, sIdx: number) => ({
+          stepNo: s.stepNo || sIdx + 1,
+          step: s.step || s.action || '',
+          result: s.result || s.expectedResult || '',
+        }))
+      : [];
+
+    const stepsDetail = steps
+      .map((s: any) => `${s.stepNo}. ${s.step}\nExpected: ${s.result}`)
+      .join('\n\n');
+
+    return {
+      title,
+      description,
+      preConditions,
+      expectedResults,
+      priority,
+      type,
+      complexity,
+      steps,
+      stepsDetail,
+    };
+  });
+
+  return validatedCases;
+}
+
+/**
  * Backward-compatible single case generator
  */
 export async function generateTestCaseWithAi(

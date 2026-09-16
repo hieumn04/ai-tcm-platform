@@ -132,7 +132,7 @@ function setupRoutes(app, sequelize, webSocketService) {
 
   // Run case routes
   const runCaseIndexRoute = require('./routes/runcases/runcases.route')(sequelize);
-  const runCaseEditRoute = require('./routes/runcases/edit.route')(sequelize);
+  const runCaseEditRoute = require('./routes/runcases/edit.route')(sequelize, webSocketService);
   const runCasesIndexByRunIdRoute = require('./routes/runcases/indexByRunId.route')(sequelize);
   const runCasesAddRoute = require('./routes/runcases/add.route')(sequelize);
   const runCasesRemoveRoute = require('./routes/runcases/remove.route')(sequelize);

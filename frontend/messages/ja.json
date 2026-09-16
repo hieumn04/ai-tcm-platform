@@ -290,7 +290,9 @@
     "preconditions": "前提条件",
     "expected_result": "期待結果",
     "details_of_the_step": "ステップ詳細",
-    "close": "閉じる"
+    "close": "閉じる",
+    "testing_badge": "がテスト中...",
+    "live_collaborative_testing": "リアルタイム同期"
   },
   "Members": {
     "member_management": "メンバー管理",

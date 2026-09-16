@@ -11,7 +11,7 @@ import {
   Chip,
   Divider,
 } from '@nextui-org/react'
-import { CheckCircle2, AlertTriangle, XCircle, ShieldAlert, FileText, RefreshCw, Sparkles, Languages } from 'lucide-react'
+import { AlertTriangle, ShieldAlert, FileText, RefreshCw, Languages, Code2, Copy } from 'lucide-react'
 import { AiAnalysisData } from '@/utils/aiControl'
 
 type Props = {
@@ -23,6 +23,7 @@ type Props = {
   onApplyStatus?: (status: 'passed' | 'pending' | 'failed') => void
   onReanalyze?: () => void
   isReanalyzing?: boolean
+  isAnalyzing?: boolean
 }
 
 export default function AiAnalysisModal({
@@ -34,52 +35,36 @@ export default function AiAnalysisModal({
   onApplyStatus,
   onReanalyze,
   isReanalyzing,
+  isAnalyzing,
 }: Props) {
-  const [activeLang, setActiveLang] = useState<'en' | 'vi'>('vi')
+  const [activeLang, setActiveLang] = useState<'en' | 'vi'>('en')
+  const [showRawOutput, setShowRawOutput] = useState(false)
 
   useEffect(() => {
-    // If only English exists, default to 'en', otherwise default to 'vi'
-    if (analysis && analysis.vi) {
+    if (analysis && analysis.vi && !analysis.en) {
       setActiveLang('vi')
     } else {
       setActiveLang('en')
     }
   }, [analysis])
 
-  if (!analysis) return null
+  const isLoadingState = Boolean(isAnalyzing || isReanalyzing || (!analysis && isOpen))
 
-  const hasBilingual = Boolean(analysis.vi && analysis.en)
-  const currentContent = (activeLang === 'vi' && analysis.vi) ? analysis.vi : (analysis.en || analysis)
+  if (!analysis && !isLoadingState) return null
+
+  const hasBilingual = Boolean(analysis?.vi && analysis?.en)
+  const currentContent = analysis
+    ? (activeLang === 'vi' && analysis.vi ? analysis.vi : (analysis.en || analysis))
+    : {}
 
   const isVi = activeLang === 'vi'
 
-  const getStatusChip = (status: string) => {
-    switch (status) {
-      case 'passed':
-        return (
-          <Chip color="success" variant="flat" startContent={<CheckCircle2 size={14} />}>
-            {isVi ? 'Passed (Đạt / Khả thi cao)' : 'Passed (High Feasibility)'}
-          </Chip>
-        )
-      case 'failed':
-        return (
-          <Chip color="danger" variant="flat" startContent={<XCircle size={14} />}>
-            {isVi ? 'Failed (Không đạt / Rủi ro cao)' : 'Failed (High Risk / Flaws Detected)'}
-          </Chip>
-        )
-      default:
-        return (
-          <Chip color="warning" variant="flat" startContent={<AlertTriangle size={14} />}>
-            {isVi ? 'Pending (Cần bổ sung bằng chứng)' : 'Pending (Needs Clarification)'}
-          </Chip>
-        )
-    }
-  }
-
   return (
+    <>
     <Modal
       isOpen={isOpen}
       onOpenChange={onClose}
+      isDismissable={false}
       size="3xl"
       scrollBehavior="inside"
       classNames={{
@@ -90,7 +75,6 @@ export default function AiAnalysisModal({
       <ModalContent>
         <ModalHeader className="flex items-center justify-between text-primary font-bold pr-8 gap-3 flex-wrap">
           <div className="flex items-center gap-2">
-            <Sparkles className="text-primary" size={20} />
             <span>DeepSeek AI - Execution & Risk Analysis</span>
           </div>
 
@@ -118,12 +102,12 @@ export default function AiAnalysisModal({
                   }`}
                   onClick={() => setActiveLang('en')}
                 >
-                  🇬🇧 English
+                  🇺🇸 English
                 </button>
               </div>
             )}
 
-            {analysis.analyzedAt && (
+            {analysis?.analyzedAt && (
               <span className="text-xs text-default-400 font-normal">
                 {new Date(analysis.analyzedAt).toLocaleDateString()}
               </span>
@@ -131,7 +115,19 @@ export default function AiAnalysisModal({
           </div>
         </ModalHeader>
 
-        <ModalBody className="py-4 flex flex-col gap-4">
+        {isLoadingState ? (
+          <ModalBody className="py-16 flex flex-col items-center justify-center text-center gap-3">
+            <div className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <div className="font-semibold text-slate-800 dark:text-slate-100 text-sm">
+              DeepSeek AI is analyzing test case...
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm">
+              Evaluating execution feasibility, edge cases, and calculating risk assessment. Please wait a moment...
+            </p>
+          </ModalBody>
+        ) : (
+          <>
+            <ModalBody className="py-4 flex flex-col gap-4">
           <div>
             <span className="text-xs text-gray-500 font-semibold uppercase block">
               {isVi ? 'Phân tích Test Case:' : 'Analyzing Test Case:'}
@@ -154,23 +150,24 @@ export default function AiAnalysisModal({
             </div>
           )}
 
-          <div className="flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-900">
-            <span className="text-sm font-semibold">{isVi ? 'Đánh giá của AI:' : 'AI Assessment:'}</span>
-            {getStatusChip(analysis.suggestedStatus)}
-            <span className="text-sm text-gray-700 dark:text-gray-300 ml-2">
-              {currentContent.assessment}
+          <div className="p-3.5 bg-slate-50 dark:bg-neutral-800/60 rounded-xl border border-slate-200 dark:border-neutral-700">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">
+              {isVi ? 'Đánh giá kỹ thuật của AI:' : 'AI Technical Evaluation:'}
             </span>
+            <div className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
+              {currentContent?.assessment || 'No assessment provided'}
+            </div>
           </div>
 
           {/* Synthetic Test Data */}
-          {Array.isArray(currentContent.testData) && currentContent.testData.length > 0 && (
+          {Array.isArray(currentContent?.testData) && currentContent.testData.length > 0 && (
             <div>
               <div className="flex items-center gap-2 font-bold text-sm mb-2">
                 <FileText size={16} className="text-primary" />
                 <span>{isVi ? 'Bộ dữ liệu Test giả lập do AI sinh (Synthetic Data):' : 'Synthetic Test Data Generated by AI:'}</span>
               </div>
               <div className="flex flex-col gap-2">
-                {currentContent.testData.map((item, idx) => (
+                {currentContent.testData.map((item: any, idx: number) => (
                   <div
                     key={idx}
                     className="p-3 bg-gray-50 dark:bg-neutral-800 rounded-lg text-sm border border-gray-200 dark:border-neutral-700 flex flex-col gap-1"
@@ -199,14 +196,14 @@ export default function AiAnalysisModal({
           <Divider />
 
           {/* Edge Cases */}
-          {Array.isArray(currentContent.edgeCases) && currentContent.edgeCases.length > 0 && (
+          {Array.isArray(currentContent?.edgeCases) && currentContent.edgeCases.length > 0 && (
             <div>
               <div className="flex items-center gap-2 font-bold text-sm mb-2 text-warning">
                 <ShieldAlert size={16} />
                 <span>{isVi ? 'Trường hợp biên & Lỗ hổng tiềm ẩn:' : 'Edge Cases & Potential Vulnerabilities:'}</span>
               </div>
               <ul className="list-disc list-inside text-sm text-gray-700 dark:text-gray-300 flex flex-col gap-1 pl-2">
-                {currentContent.edgeCases.map((edge, idx) => (
+                {currentContent.edgeCases.map((edge: string, idx: number) => (
                   <li key={idx}>{edge}</li>
                 ))}
               </ul>
@@ -214,7 +211,7 @@ export default function AiAnalysisModal({
           )}
 
           {/* Recommendations */}
-          {currentContent.recommendations && (
+          {currentContent?.recommendations && (
             <div className="p-3 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-900 text-sm">
               <span className="font-bold text-success block mb-1">
                 {isVi ? '💡 Khuyến nghị cho QA & Lập trình viên:' : '💡 Recommendations for QA & Developers:'}
@@ -228,9 +225,16 @@ export default function AiAnalysisModal({
 
         <ModalFooter className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Chip color="success" variant="flat" size="sm" startContent={<CheckCircle2 size={12} />}>
-              {isVi ? 'Đã lưu vào Database' : 'Saved to Database'}
-            </Chip>
+            <Button
+              size="sm"
+              variant="flat"
+              color="default"
+              className="text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800"
+              startContent={<Code2 size={13} />}
+              onClick={() => setShowRawOutput(true)}
+            >
+              {isVi ? 'Xem Raw DeepSeek' : 'Raw DeepSeek Response'}
+            </Button>
           </div>
           <div className="flex items-center gap-2">
             {onReanalyze && (
@@ -244,31 +248,64 @@ export default function AiAnalysisModal({
                 {isVi ? 'Phân tích lại' : 'Re-Analyze'}
               </Button>
             )}
-            {onApplyStatus && analysis.suggestedStatus && (
-              <Button
-                size="sm"
-                color={
-                  analysis.suggestedStatus === 'passed'
-                    ? 'success'
-                    : analysis.suggestedStatus === 'failed'
-                      ? 'danger'
-                      : 'warning'
-                }
-                variant="solid"
-                onClick={() => onApplyStatus(analysis.suggestedStatus)}
-                startContent={<CheckCircle2 size={14} />}
-              >
-                {isVi
-                  ? `Áp dụng trạng thái (${analysis.suggestedStatus.toUpperCase()})`
-                  : `Apply Status (${analysis.suggestedStatus.toUpperCase()})`}
-              </Button>
-            )}
             <Button size="sm" variant="light" onClick={onClose}>
               {isVi ? 'Đóng' : 'Close'}
             </Button>
           </div>
         </ModalFooter>
+          </>
+        )}
       </ModalContent>
     </Modal>
+
+    {/* Sub-modal: Raw DeepSeek AI Analysis JSON Viewer */}
+    <Modal
+      isOpen={showRawOutput}
+      onOpenChange={(open) => setShowRawOutput(open)}
+      size="2xl"
+      scrollBehavior="inside"
+      classNames={{
+        base: 'bg-white dark:bg-neutral-900',
+        header: 'border-b border-slate-200 dark:border-neutral-700 pb-3',
+        footer: 'border-t border-slate-200 dark:border-neutral-700 pt-3',
+      }}
+    >
+      <ModalContent>
+        <ModalHeader className="flex items-center justify-between text-slate-900 dark:text-white font-bold">
+          <div className="flex items-center gap-2">
+            <Code2 className="text-primary" size={20} />
+            <span>Raw DeepSeek AI Response (JSON)</span>
+          </div>
+          <Button
+            size="sm"
+            variant="flat"
+            color="primary"
+            className="mr-6 text-xs font-semibold"
+            startContent={<Copy size={14} />}
+            onClick={() => {
+              if (analysis) {
+                navigator.clipboard.writeText(JSON.stringify(analysis, null, 2))
+              }
+            }}
+          >
+            Copy JSON
+          </Button>
+        </ModalHeader>
+        <ModalBody className="py-4">
+          <div className="text-xs text-slate-600 dark:text-slate-400 mb-2">
+            Detailed raw JSON returned by DeepSeek API for this test case analysis:
+          </div>
+          <pre className="bg-slate-50 text-slate-900 p-4 rounded-xl font-mono text-xs whitespace-pre-wrap max-h-[60vh] overflow-y-auto leading-relaxed border border-slate-300 shadow-sm select-text">
+            {JSON.stringify(analysis, null, 2)}
+          </pre>
+        </ModalBody>
+        <ModalFooter>
+          <Button color="primary" variant="light" onClick={() => setShowRawOutput(false)}>
+            Close
+          </Button>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
+    </>
   )
 }

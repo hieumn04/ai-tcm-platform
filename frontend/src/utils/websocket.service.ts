@@ -21,12 +21,20 @@ class WebSocketService {
   }
 
   private connect() {
+    if (typeof window === 'undefined') {
+      return
+    }
+    if (this.socket) {
+      return
+    }
 
-    const wsServer = process.env.NEXT_PUBLIC_BACKEND_ORIGIN || 'http://localhost:8001'
+    const rawOrigin = process.env.NEXT_PUBLIC_BACKEND_ORIGIN || 'http://localhost:8001'
+    // Normalize: strip trailing /api or / to avoid treating /api as Socket.IO namespace
+    const wsServer = rawOrigin.replace(/\/api\/?$/, '').replace(/\/+$/, '')
 
     console.log('[WS: Connecting] with config', {
       server: wsServer,
-      path: '/backend/socket.io/' ,
+      path: '/backend/socket.io/',
       transports: ['websocket', 'polling'],
       envDomain: process.env.NEXT_PUBLIC_BACKEND_ORIGIN,
     })
@@ -86,13 +94,19 @@ class WebSocketService {
   }
 
   async waitForConnection(timeout: number = 10000): Promise<void> {
+    if (typeof window === 'undefined') {
+      return Promise.resolve()
+    }
     if (this.isConnected) {
       return Promise.resolve()
+    }
+    if (!this.socket) {
+      this.connect()
     }
 
     return new Promise((resolve, reject) => {
       if (!this.socket) {
-        reject(new Error('WebSocket not initialized'))
+        resolve()
         return
       }
 
@@ -175,6 +189,71 @@ class WebSocketService {
     return true
   }
 
+  // === Collaborative Test Runs Methods ===
+  joinRunRoom(runId: number | string) {
+    if (!runId) return
+    console.log('[WS: joinRunRoom]', { runId })
+    if (this.isConnected && this.socket) {
+      this.socket.emit('run:join', runId)
+    } else {
+      this.waitForConnection().then(() => {
+        this.socket?.emit('run:join', runId)
+      }).catch(err => console.error('[WS: joinRunRoom error]', err))
+    }
+  }
+
+  leaveRunRoom(runId: number | string) {
+    if (!runId || !this.socket) return
+    console.log('[WS: leaveRunRoom]', { runId })
+    this.socket.emit('run:leave', runId)
+  }
+
+  startTestingCase(
+    runId: number | string,
+    caseId: number,
+    userId: number | null | undefined,
+    userName: string,
+  ) {
+    if (!this.socket || !runId || !caseId) return
+    this.socket.emit('case:start_testing', { runId, caseId, userId, userName })
+  }
+
+  stopTestingCase(runId: number | string, caseId?: number) {
+    if (!this.socket || !runId) return
+    this.socket.emit('case:stop_testing', { runId, caseId })
+  }
+
+  onActiveTestersChanged(
+    cb: (data: {
+      runId: number
+      activeTesters: Array<{ caseId: number; userId: number; userName: string }>
+    }) => void,
+  ) {
+    if (!this.socket) return () => {}
+    this.socket.on('case:active_testers_changed', cb)
+    return () => {
+      this.socket?.off('case:active_testers_changed', cb)
+    }
+  }
+
+  onCaseStatusUpdated(
+    cb: (data: {
+      runId: number
+      updatedBy: number
+      updatedCases: Array<{
+        runCaseId: number
+        caseId: number
+        statuses: Array<{ platform: string; status: number; userId: number }>
+      }>
+    }) => void,
+  ) {
+    if (!this.socket) return () => {}
+    this.socket.on('case:status_updated', cb)
+    return () => {
+      this.socket?.off('case:status_updated', cb)
+    }
+  }
+
   disconnect() {
     if (this.socket) {
       console.log('[WS: Disconnecting]')
@@ -185,4 +264,5 @@ class WebSocketService {
   }
 }
 
+export const wsService = new WebSocketService()
 export default WebSocketService

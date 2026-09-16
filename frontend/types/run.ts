@@ -113,6 +113,8 @@ type RunMessages = {
   expectedResult: string;
   detailsOfTheStep: string;
   close: string;
+  testingBadge?: string;
+  liveCollaborativeTesting?: string;
 };
 
 export type {

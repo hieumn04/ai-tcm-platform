@@ -1,9 +1,8 @@
 'use client'
 import { useState, useEffect, useContext } from 'react'
-import { Sparkles } from 'lucide-react'
+import { Folder, Clipboard, FlaskConical } from 'lucide-react'
 import { title, subtitle } from '@/components/primitives'
 import { Card, CardBody, Chip, Divider } from '@nextui-org/react'
-import { Folder, Clipboard, FlaskConical } from 'lucide-react'
 import { HomeMessages } from './page'
 import { TokenContext } from '@/utils/TokenProvider'
 import { aggregateBasicInfo } from './aggregate'
@@ -157,7 +156,6 @@ export function ProjectHome({ projectId, messages }: Props) {
         </Chip>
         <Chip
           variant="flat"
-          startContent={<Sparkles size={16} />}
           className="px-3 ms-2"
         >
           {stats.aiCasesCount} {'AI Test Cases'}

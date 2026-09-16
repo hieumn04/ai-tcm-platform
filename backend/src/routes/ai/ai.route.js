@@ -9,6 +9,9 @@ module.exports = function (sequelize, webSocketService) {
   // Generate test case from prompt
   router.post('/generate', verifySignedIn, (req, res) => controller.generateTestCase(req, res));
 
+  // Stream test case generation via SSE
+  router.post('/generate-stream', verifySignedIn, (req, res) => controller.generateTestCaseStream(req, res));
+
   // Save generated test case
   router.post('/save', verifySignedIn, (req, res) => controller.saveAiTestCase(req, res));
 

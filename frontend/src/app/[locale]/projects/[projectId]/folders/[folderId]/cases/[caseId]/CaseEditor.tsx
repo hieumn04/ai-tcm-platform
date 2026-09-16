@@ -10,7 +10,7 @@ import {
   Tooltip,
 } from '@nextui-org/react'
 import { useRouter } from '@/src/navigation'
-import { Save, Plus, ArrowLeft, Circle, Trash, Sparkles } from 'lucide-react'
+import { Save, Plus, ArrowLeft, Circle, Trash } from 'lucide-react'
 import { priorities, templates, testTypes } from '@/config/selection'
 import CaseStepsEditor from './CaseStepsEditor'
 import { fetchCase, updateCase } from '@/utils/caseControl'
@@ -366,16 +366,6 @@ export default function CaseEditor({
             <Circle size={8} color="#525252" fill="#525252" className="me-1" />
           )}
           <Button
-            startContent={
-              <Sparkles
-                size={16}
-                className={
-                  isAnalyzing
-                    ? 'animate-spin text-purple-600'
-                    : 'text-purple-600 dark:text-purple-400'
-                }
-              />
-            }
             size="sm"
             variant="flat"
             isLoading={isAnalyzing}
@@ -795,6 +785,21 @@ export default function CaseEditor({
                 onStepDelete={onDeleteClick}
                 messages={messages}
               />
+            )}
+            {(!testCase.Steps || testCase.Steps.length === 0) && testCase.stepsDetail && (
+              <div className="mt-3">
+                <Textarea
+                  size="sm"
+                  variant="bordered"
+                  label={<span className="font-bold">Steps Detail (Text)</span>}
+                  value={testCase.stepsDetail}
+                  onValueChange={(changeValue) => {
+                    setTestCase({ ...testCase, stepsDetail: changeValue })
+                    setIsDirty(true)
+                  }}
+                  isDisabled={isReporterOnly}
+                />
+              </div>
             )}
           </div>
         )}

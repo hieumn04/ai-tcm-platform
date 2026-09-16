@@ -43,6 +43,8 @@ export default function Page({
     expectedResult: t('expected_result'),
     detailsOfTheStep: t('details_of_the_step'),
     close: t('close'),
+    testingBadge: t('testing_badge'),
+    liveCollaborativeTesting: t('live_collaborative_testing'),
   }
 
   const rst = useTranslations('RunStatus')

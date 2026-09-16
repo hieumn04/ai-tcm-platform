@@ -51,6 +51,51 @@ class AIController {
   }
 
   /**
+   * Stream test suite generation using HTTP SSE (Server-Sent Events)
+   */
+  async generateTestCaseStream(req, res) {
+    try {
+      const { prompt, image, language = 'en' } = req.body;
+
+      if ((!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) && !image) {
+        return ResponseUtil.validationError(res, ['Please provide a prompt description or an image']);
+      }
+
+      // HTTP Server-Sent Events headers (Point 6)
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      if (res.flushHeaders) {
+        res.flushHeaders();
+      }
+
+      await deepseekService.streamTestSuite({
+        prompt: prompt ? prompt.trim() : '',
+        image,
+        language,
+        onChunk: (chunk) => {
+          res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+          if (typeof res.flush === 'function') {
+            res.flush();
+          }
+        },
+      });
+
+      // Signal stream completion
+      res.write('data: [DONE]\n\n');
+      res.end();
+    } catch (error) {
+      console.error('[AIController Error in generateTestCaseStream]:', error);
+      if (!res.headersSent) {
+        return ResponseUtil.serverError(res, error, error.message || 'Failed to stream test case with AI');
+      }
+      res.write(`data: ${JSON.stringify({ error: error.message || 'Stream error occurred' })}\n\n`);
+      res.end();
+    }
+  }
+
+  /**
    * Save AI generated test case to database
    */
   async saveAiTestCase(req, res) {

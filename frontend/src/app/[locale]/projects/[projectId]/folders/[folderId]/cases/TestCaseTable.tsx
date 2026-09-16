@@ -38,7 +38,6 @@ import {
   Play,
   ExternalLink,
   Copy,
-  Sparkles,
   RefreshCw,
 } from 'lucide-react'
 import { CaseType, CasesMessages } from '@/types/case'
@@ -93,6 +92,7 @@ type Props = {
   sortDirection?: 'ASC' | 'DESC'
   onSortChange?: (column: string, direction: 'ASC' | 'DESC') => void
   onResetFilters?: () => void
+  onRefresh?: () => void
 }
 
 export default function TestCaseTable({
@@ -101,6 +101,7 @@ export default function TestCaseTable({
   cases,
   onCreateCase,
   onImportCase,
+  onOpenAiDialog,
   onDeleteCase,
   onDuplicateCase,
   onDeleteCases,
@@ -110,6 +111,7 @@ export default function TestCaseTable({
   folder,
   onSearchCases,
   totalCasesCount,
+  filteredTotalCasesCount,
   aiCasesCount,
   page,
   setPage,
@@ -117,6 +119,7 @@ export default function TestCaseTable({
   totalPages,
   isPageLoaded,
   searchTerm,
+  setSearchTerm,
   onAddTestCasesIntoRun,
   isAllPagesSelected,
   setIsAllPagesSelected,
@@ -124,7 +127,7 @@ export default function TestCaseTable({
   sortDirection,
   onSortChange,
   onResetFilters,
-  onOpenAiDialog,
+  onRefresh,
 }: Props) {
   const router = useRouter()
   const tokenContext = useContext(TokenContext)
@@ -229,8 +232,10 @@ export default function TestCaseTable({
         return
       }
 
+      setAnalysisCaseTitle(testCase.title)
+      setAnalysisData(testCase.aiAssessment || null)
       setIsAnalyzing(true)
-      toastContext.showToast(`[DeepSeek AI]: Đang phân tích kịch bản ${testCase.customId || testCase.title}...`, 'dark')
+      setIsAnalysisModalOpen(true)
 
       try {
         const analysis = await executeCaseWithAi(
@@ -241,9 +246,7 @@ export default function TestCaseTable({
 
         if (analysis) {
           testCase.aiAssessment = analysis
-          setAnalysisCaseTitle(testCase.title)
           setAnalysisData(analysis)
-          setIsAnalysisModalOpen(true)
           toastContext.showToast(`[DeepSeek AI]: Đã phân tích & lưu kịch bản ${testCase.customId || testCase.title}!`, 'success')
         }
       } catch (error: any) {
@@ -432,20 +435,6 @@ export default function TestCaseTable({
                   {(cellValue as string) || '-'}
                 </span>
               </div>
-              {hasSavedAi && (
-                <Tooltip content="DeepSeek AI Analysis Available (Click to view)">
-                  <button
-                    type="button"
-                    className="cursor-pointer inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800 transition-colors tracking-wide"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleViewSavedAiAnalysis(testCase)
-                    }}
-                  >
-                    AI
-                  </button>
-                </Tooltip>
-              )}
             </div>
           )
         }
@@ -581,7 +570,6 @@ export default function TestCaseTable({
                 {testCase.aiAssessment ? (
                   <DropdownItem
                     key={`view-ai-${testCase.id}`}
-                    startContent={<Sparkles size={16} className="text-primary" />}
                     onClick={() => handleViewSavedAiAnalysis(testCase)}
                   >
                     View AI Analysis (Saved)
@@ -592,9 +580,7 @@ export default function TestCaseTable({
                   startContent={
                     testCase.aiAssessment ? (
                       <RefreshCw size={16} className="text-primary" />
-                    ) : (
-                      <Sparkles size={16} className="text-primary" />
-                    )
+                    ) : undefined
                   }
                   isDisabled={isDisabled || !tokenContext.isSignedIn()}
                   onClick={() => handleExecuteRunSenai(testCase)}
@@ -745,6 +731,23 @@ export default function TestCaseTable({
               </Button>
             </>
           )}
+          {onRefresh && (
+            <Button
+              startContent={
+                <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+              }
+              size="sm"
+              variant="flat"
+              color="primary"
+              onClick={onRefresh}
+              isLoading={loading}
+              isDisabled={isDisabled}
+              title="Reload latest test cases from server"
+              className="font-medium bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 hover:bg-blue-100"
+            >
+              Reload Data
+            </Button>
+          )}
           <Button
             startContent={<Plus size={16} />}
             size="sm"
@@ -836,7 +839,6 @@ export default function TestCaseTable({
           </Chip>
           <Chip
             variant="flat"
-            startContent={<Sparkles size={16} />}
             className="px-3"
           >
             {aiCasesCount} AI Test Cases
@@ -949,6 +951,7 @@ export default function TestCaseTable({
         onClose={() => setIsAnalysisModalOpen(false)}
         testCaseTitle={analysisCaseTitle}
         analysis={analysisData}
+        isAnalyzing={isAnalyzing}
       />
     </>
   )

@@ -42,12 +42,15 @@ import {
   CopyMinus,
 } from 'lucide-react'
 import TestCaseSelector from './TestCaseSelector'
+import RunProgressDounut from './RunPregressDonutChart'
+import { wsService } from '@/src/utils/websocket.service'
 import { testRunCaseStatus, testRunStatus } from '@/config/selection'
 import {
   RunType,
   RunMessages,
   RunCaseType,
   PlatformStatusType,
+  RunStatusCountType,
 } from '@/types/run'
 import { CaseMessages } from '@/types/case'
 import { capitalizeWords } from '@/utils/textUtils'
@@ -252,6 +255,101 @@ export default function RunEditor({
   const [totalRunCasesCount, setTotalRunCasesCount] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
   const [runCaseIdsToRemove, setRunCaseIdsToRemove] = useState<number[]>([])
+
+  // Collaborative presence state (Point 2 & 3)
+  const [activeTesters, setActiveTesters] = useState<
+    Array<{ caseId: number; userId: number; userName: string }>
+  >([])
+
+  // Socket.IO Collaborative Test Runs lifecycle & listeners
+  useEffect(() => {
+    if (!runId) return
+
+    // 1. Join Socket.IO room for this run
+    wsService.joinRunRoom(runId)
+
+    // 2. Listen for presence changes (active testers)
+    const unsubPresence = wsService.onActiveTestersChanged((data) => {
+      if (String(data.runId) === String(runId)) {
+        setActiveTesters(data.activeTesters || [])
+      }
+    })
+
+    // 3. Listen for delta status updates (Point 3 & 4)
+    const unsubStatus = wsService.onCaseStatusUpdated((data) => {
+      if (String(data.runId) !== String(runId)) return
+
+      const { updatedCases } = data
+      if (!Array.isArray(updatedCases) || updatedCases.length === 0) return
+
+      // Update state in-place -> auto recalculates statusCounts -> Donut Chart & Table re-render smoothly
+      setRunCases((prevRunCases) => {
+        let hasChanges = false
+        const nextRunCases = prevRunCases.map((rc) => {
+          const matched = updatedCases.find(
+            (u) => u.runCaseId === rc.id || u.caseId === rc.caseId,
+          )
+          if (!matched) return rc
+
+          hasChanges = true
+          const newStatuses = [...rc.statuses]
+          matched.statuses.forEach((st) => {
+            const idx = newStatuses.findIndex(
+              (s) =>
+                s.platformStatus?.platform?.toLowerCase() ===
+                st.platform?.toLowerCase(),
+            )
+            if (idx !== -1) {
+              newStatuses[idx] = { ...newStatuses[idx], status: st.status }
+            } else {
+              newStatuses.push({
+                status: st.status,
+                platformStatus: { id: '', platform: st.platform as any },
+                platformId: '',
+              })
+            }
+          })
+
+          return {
+            ...rc,
+            statuses: newStatuses,
+            updatedAt: new Date().toISOString(),
+          }
+        })
+
+        return hasChanges ? nextRunCases : prevRunCases
+      })
+    })
+
+    return () => {
+      wsService.leaveRunRoom(runId)
+      unsubPresence?.()
+      unsubStatus?.()
+    }
+  }, [runId])
+
+  // Point 5: Single source of truth for Donut Chart (derived directly from runCases)
+  const statusCounts = useMemo<RunStatusCountType[]>(() => {
+    const countsMap: Record<number, number> = {}
+    testRunCaseStatus.forEach((_, idx) => {
+      countsMap[idx] = 0
+    })
+
+    runCases.forEach((rc) => {
+      if (rc.statuses && rc.statuses.length > 0) {
+        rc.statuses.forEach((s) => {
+          countsMap[s.status] = (countsMap[s.status] || 0) + 1
+        })
+      } else {
+        countsMap[0] = (countsMap[0] || 0) + 1
+      }
+    })
+
+    return Object.entries(countsMap).map(([status, count]) => ({
+      status: Number(status),
+      count,
+    }))
+  }, [runCases])
 
   useFormGuard(isDirty, messages.areYouSureLeave)
 
@@ -1113,8 +1211,8 @@ export default function RunEditor({
       </div>
 
       <div className="container mx-auto w-full pt-1 px-6 flex-grow">
-        <div className="flex">
-          <div className="flex-grow">
+        <div className="flex flex-col lg:flex-row gap-6 items-start mt-2">
+          <div className="flex-grow w-full">
             <div className="flex items-center gap-4 w-full">
               <Input
                 size="sm"
@@ -1161,6 +1259,27 @@ export default function RunEditor({
                 setTestRun({ ...testRun, description: changeValue })
               }}
               className="mt-3"
+            />
+          </div>
+
+          {/* Donut Chart & Live Sync Indicator */}
+          <div className="flex flex-col items-center bg-white dark:bg-neutral-800/80 p-3 rounded-xl border border-gray-200 dark:border-neutral-700 shadow-sm min-w-[300px]">
+            <div className="flex items-center justify-between w-full px-2 mb-1">
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                {messages.progress}
+              </span>
+              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <span>{messages.liveCollaborativeTesting || 'Real-time Live Sync'}</span>
+              </div>
+            </div>
+            <RunProgressDounut
+              statusCounts={statusCounts}
+              testRunCaseStatusMessages={testRunCaseStatusMessages}
+              theme="light"
             />
           </div>
         </div>
@@ -1347,10 +1466,14 @@ export default function RunEditor({
           </Modal>
         )}
 
+
+
         <div className="mt-3 flex rounded-small border-2 dark:border-neutral-700 mb-12">
           <div className="w-full">
             <TestCaseSelector
               runCases={runCases}
+              runId={runId}
+              activeTesters={activeTesters}
               isDisabled={!hasEditPermission()}
               selectedKeys={selectedKeys}
               onSelectionChange={setSelectedKeys}

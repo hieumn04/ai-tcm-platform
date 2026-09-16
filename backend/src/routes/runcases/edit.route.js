@@ -3,10 +3,10 @@ const router = express.Router();
 const defineRunCase = require('../../models/runCases.model');
 const { DataTypes } = require('sequelize');
 
-module.exports = function (sequelize) {
+module.exports = function (sequelize, webSocketService) {
   const RunCase = defineRunCase(sequelize, DataTypes);
   const RunCasesController = require('../../controllers/runCases.controller');
-  const controller = new RunCasesController(sequelize, RunCase);
+  const controller = new RunCasesController(sequelize, RunCase, webSocketService);
 
   const { verifySignedIn } = require('../../middlewares/auth.middleware')(sequelize);
   const { verifyProjectDeveloperFromRunId } = require('../../middlewares/verifyEditable.middleware')(sequelize);

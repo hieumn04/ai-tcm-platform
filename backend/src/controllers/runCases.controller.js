@@ -2,9 +2,10 @@ const { DataTypes, Op } = require('sequelize');
 const ResponseUtil = require('../utils/response.util');
 
 class RunCasesController {
-  constructor(sequelize, RunCase) {
+  constructor(sequelize, RunCase, webSocketService) {
     this.sequelize = sequelize;
     this.RunCase = RunCase;
+    this.webSocketService = webSocketService;
     this.Case = require('../models/cases.model')(sequelize, DataTypes);
     this.Run = require('../models/runs.model')(sequelize, DataTypes);
     this.RunCaseStatus = require('../models/runCaseStatus.model')(sequelize, DataTypes);
@@ -152,6 +153,7 @@ class RunCasesController {
       
       let processedCount = 0;
       let skippedCount = 0;
+      const updatedCases = [];
       
       for (const runCase of runCases) {
         if (!runCase.caseId) {
@@ -168,9 +170,32 @@ class RunCasesController {
         const newStatuses = runCase.statuses || [];
         await this.updateRunCaseStatusesForCase(currentRunCase, newStatuses, platformMap, userId, transaction);
         processedCount++;
+
+        updatedCases.push({
+          runCaseId: currentRunCase.id,
+          caseId: runCase.caseId,
+          statuses: newStatuses.map(s => ({
+            platform: s.platform,
+            status: s.status,
+            userId: userId,
+          })),
+        });
       }
       
       await transaction.commit();
+
+      // Point 1 & 4: Broadcast delta updates ONLY after commit succeeds
+      if (this.webSocketService && updatedCases.length > 0) {
+        try {
+          this.webSocketService.broadcastCaseStatusUpdated(runId, {
+            runId: Number(runId),
+            updatedBy: userId,
+            updatedCases,
+          });
+        } catch (wsError) {
+          console.error('[RunCasesController] WebSocket broadcast error:', wsError);
+        }
+      }
       
       return ResponseUtil.success(res, {
         processed: processedCount,

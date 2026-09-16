@@ -27,7 +27,7 @@ import {
   Spinner,
   Tooltip,
 } from '@nextui-org/react'
-import { MoreVertical, RotateCcw, ClipboardList, FileText, Sparkles, RefreshCw } from 'lucide-react'
+import { MoreVertical, RotateCcw, ClipboardList, FileText, RefreshCw, Users } from 'lucide-react'
 import { testRunCaseStatus } from '@/config/selection'
 import { CaseMessages, CaseType, PlatformEvidenceType } from '@/types/case'
 import { RunCaseType, RunMessages } from '@/types/run'
@@ -42,6 +42,7 @@ import { TokenContext } from '@/utils/TokenProvider'
 import { ToastContext } from '@/utils/ToastProvider'
 import AiAnalysisModal from '../../folders/[folderId]/cases/AiAnalysisModal'
 import { executeCaseWithAi, AiAnalysisData } from '@/utils/aiControl'
+import { wsService } from '@/src/utils/websocket.service'
 
 // Declare global handler type for TypeScript
 declare global {
@@ -52,6 +53,8 @@ declare global {
 
 type Props = {
   runCases: RunCaseType[]
+  runId?: string
+  activeTesters?: Array<{ caseId: number; userId: number; userName: string }>
   isDisabled: boolean
   selectedKeys: Selection
   onSelectionChange: React.Dispatch<React.SetStateAction<Selection>>
@@ -88,6 +91,8 @@ type Props = {
 
 export default function TestCaseSelector({
   runCases,
+  runId,
+  activeTesters = [],
   selectedKeys,
   onSelectionChange,
   onChangeStatus,
@@ -132,11 +137,12 @@ export default function TestCaseSelector({
         return
       }
 
+      setAnalysisCaseTitle(testCase.title)
+      setAnalysisData(testCase.aiAssessment || null)
+      setAnalysisRunCaseId(runCaseId || null)
+      setCurrentTestCaseForAnalysis(testCase)
       setIsAnalyzing(true)
-      toastContext.showToast(
-        `[DeepSeek AI]: Analyzing test case "${testCase.customId || testCase.title}"...`,
-        'dark'
-      )
+      setIsAnalysisModalOpen(true)
 
       try {
         const analysis = await executeCaseWithAi(
@@ -149,11 +155,7 @@ export default function TestCaseSelector({
         )
 
         if (analysis) {
-          setAnalysisCaseTitle(testCase.title)
           setAnalysisData(analysis)
-          setAnalysisRunCaseId(runCaseId || null)
-          setCurrentTestCaseForAnalysis(testCase)
-          setIsAnalysisModalOpen(true)
 
           // Update local runCases state so AI badge appears immediately
           if (runCaseId) {
@@ -521,7 +523,22 @@ export default function TestCaseSelector({
 
         return (
           <div className="flex flex-row items-center">
-            <Dropdown key={platform}>
+            <Dropdown
+              key={platform}
+              onOpenChange={(isOpen) => {
+                if (!runId || !testCase?.id) return
+                if (isOpen) {
+                  wsService.startTestingCase(
+                    runId,
+                    testCase.id,
+                    tokenContext.token.user?.id ?? 0,
+                    tokenContext.token.user?.username || tokenContext.token.user?.email || 'Tester',
+                  )
+                } else {
+                  wsService.stopTestingCase(runId, testCase.id)
+                }
+              }}
+            >
               <DropdownTrigger>
                 <Button size="sm" variant="light" className="px-0">
                   <div className="flex items-center gap-1 overflow-hidden text-ellipsis">
@@ -540,7 +557,12 @@ export default function TestCaseSelector({
                 {testRunCaseStatus.map((runCaseStatus, index) => (
                   <DropdownItem
                     key={runCaseStatus.uid}
-                    onClick={() => onChangeStatus(runCase.id, platform, index)}
+                    onClick={() => {
+                      onChangeStatus(runCase.id, platform, index)
+                      if (runId && testCase?.id) {
+                        wsService.stopTestingCase(runId, testCase.id)
+                      }
+                    }}
                   >
                     <span className="flex items-center gap-1">
                       {renderStatusIcon(runCaseStatus.uid)}
@@ -598,6 +620,9 @@ export default function TestCaseSelector({
                   : 'border-l-4 pl-2 border-l-gray-300'
 
           const hasSavedAi = Boolean(runCase.aiAssessment || testCase?.aiAssessment)
+          const activeTester = activeTesters?.find(
+            (t) => Number(t.caseId) === Number(testCase?.id),
+          )
 
           return (
             <div
@@ -609,33 +634,52 @@ export default function TestCaseSelector({
                 minHeight: '1rem',
               }}
             >
-              <span>{String(cellValue ?? '')}</span>
-              {hasSavedAi && (
-                <Tooltip content="DeepSeek AI Analysis Available (Click to view)">
-                  <button
-                    type="button"
-                    className="cursor-pointer inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800 transition-colors tracking-wide"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleViewSavedAiAnalysis(runCase, testCase)
-                    }}
+              <div className="flex items-center gap-2">
+                <span>{String(cellValue ?? '')}</span>
+                {activeTester && (
+                  <Tooltip
+                    content={`${activeTester.userName} ${messages.testingBadge || 'testing...'}`}
                   >
-                    AI
-                  </button>
-                </Tooltip>
-              )}
+                    <Chip
+                      size="sm"
+                      color="warning"
+                      variant="flat"
+                      startContent={<Users size={12} className="text-amber-600" />}
+                      className="text-[10px] font-medium h-5 animate-pulse bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 cursor-default"
+                    >
+                      {activeTester.userName}
+                    </Chip>
+                  </Tooltip>
+                )}
+              </div>
             </div>
           )
         }
         case 'description':
         case 'steps':
         case 'expectedResults': {
-          const textValue =
-            columnKey === 'description'
-              ? testCase.description
-              : columnKey === 'steps'
-                ? testCase.stepsDetail
-                : testCase.expectedResults
+          let textValue = ''
+          if (columnKey === 'description') {
+            textValue = testCase.description || ''
+          } else if (columnKey === 'expectedResults') {
+            textValue = testCase.expectedResults || ''
+          } else if (columnKey === 'steps') {
+            if (testCase.stepsDetail && testCase.stepsDetail.trim()) {
+              textValue = testCase.stepsDetail
+            } else {
+              const stepsList = (testCase as any)?.Steps || (testCase as any)?.steps
+              if (Array.isArray(stepsList) && stepsList.length > 0) {
+                textValue = stepsList
+                  .map((s: any, idx: number) => {
+                    const stepNum = s?.caseSteps?.stepNo ?? s?.stepNo ?? (idx + 1)
+                    const stepText = s?.step || s?.text || s?.detailsOfTheStep || ''
+                    const resultText = s?.result || s?.expectedResult || ''
+                    return `${stepNum}. ${stepText}${resultText ? ` (Expected: ${resultText})` : ''}`
+                  })
+                  .join('\n')
+              }
+            }
+          }
 
           const lines = textValue ? textValue.split(/\r?\n/) : []
           const displayLines = lines.slice(0, 5)
@@ -685,43 +729,63 @@ export default function TestCaseSelector({
           const lines = title.split(/\r?\n/)
           const displayLines = lines.slice(0, 5)
           const isTruncated = lines.length > 5 || (title && title.length > 100)
+          const activeTester = activeTesters?.find(
+            (t) => Number(t.caseId) === Number(testCase?.id),
+          )
 
           return (
-            <Tooltip
-              content={
+            <div className="flex items-center gap-2">
+              <Tooltip
+                content={
+                  <div
+                    style={{
+                      whiteSpace: 'pre-line',
+                      wordBreak: 'break-all',
+                      overflowWrap: 'break-word',
+                      maxWidth: 400,
+                    }}
+                  >
+                    {title}
+                  </div>
+                }
+                radius="none"
+                style={{ maxWidth: 400 }}
+              >
                 <div
+                  className="text-left w-full"
                   style={{
-                    whiteSpace: 'pre-line',
-                    wordBreak: 'break-all',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 5,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    wordBreak: 'break-word',
                     overflowWrap: 'break-word',
-                    maxWidth: 400,
+                    whiteSpace: 'pre-line',
+                    lineHeight: '1.5em',
+                    maxHeight: '7.5em',
                   }}
                 >
-                  {title}
+                  {displayLines.join('\n')}
+                  {isTruncated ? '...' : ''}
                 </div>
-              }
-              radius="none"
-              style={{ maxWidth: 400 }}
-            >
-              <div
-                className="text-left w-full"
-                style={{
-                  display: '-webkit-box',
-                  WebkitLineClamp: 5,
-                  WebkitBoxOrient: 'vertical',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  wordBreak: 'break-word',
-                  overflowWrap: 'break-word',
-                  whiteSpace: 'pre-line',
-                  lineHeight: '1.5em',
-                  maxHeight: '7.5em',
-                }}
-              >
-                {displayLines.join('\n')}
-                {isTruncated ? '...' : ''}
-              </div>
-            </Tooltip>
+              </Tooltip>
+              {activeTester && (
+                <Tooltip
+                  content={`${activeTester.userName} ${messages.testingBadge || 'testing...'}`}
+                >
+                  <Chip
+                    size="sm"
+                    color="warning"
+                    variant="flat"
+                    startContent={<Users size={12} className="text-amber-600" />}
+                    className="text-[10px] font-medium h-5 animate-pulse bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 cursor-default shrink-0"
+                  >
+                    {activeTester.userName}
+                  </Chip>
+                </Tooltip>
+              )}
+            </div>
           )
         }
         case 'priority':
@@ -744,7 +808,6 @@ export default function TestCaseSelector({
                 {hasSavedAi ? (
                   <DropdownItem
                     key={`view-ai-${runCase.id}`}
-                    startContent={<Sparkles size={16} className="text-primary" />}
                     onClick={() => handleViewSavedAiAnalysis(runCase, testCase)}
                   >
                     View AI Analysis (Saved)
@@ -755,9 +818,7 @@ export default function TestCaseSelector({
                   startContent={
                     hasSavedAi ? (
                       <RefreshCw size={16} className="text-primary" />
-                    ) : (
-                      <Sparkles size={16} className="text-primary" />
-                    )
+                    ) : undefined
                   }
                   onClick={() => handleExecuteAiAnalysis(testCase, runCase.id)}
                 >
@@ -788,6 +849,8 @@ export default function TestCaseSelector({
       getEvidenceData,
       handleViewSavedAiAnalysis,
       handleExecuteAiAnalysis,
+      activeTesters,
+      messages.testingBadge,
     ],
   )
 
@@ -895,7 +958,21 @@ export default function TestCaseSelector({
               </TableColumn>
             )}
           </TableHeader>
-          <TableBody emptyContent={messages.noCasesFound}>
+          <TableBody
+            emptyContent={
+              <div className="flex flex-col items-center justify-center py-6 px-4 text-center max-w-md mx-auto my-2">
+                <div className="w-10 h-10 rounded-full bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 flex items-center justify-center mb-2.5 text-neutral-500">
+                  <ClipboardList size={18} />
+                </div>
+                <h4 className="font-semibold text-neutral-700 dark:text-neutral-200 text-xs mb-1">
+                  {messages.noCasesFound || 'No test cases found in this run'}
+                </h4>
+                <p className="text-[11px] text-neutral-500 dark:text-neutral-400 leading-relaxed">
+                  Select checkboxes on the left or click any test case row to include it in this test run.
+                </p>
+              </div>
+            }
+          >
             {sortedItems.map((item) => (
               <TableRow key={item.id}>
                 {headerColumns.map((column) => (
@@ -961,6 +1038,7 @@ export default function TestCaseSelector({
         analysis={analysisData}
         onApplyStatus={handleApplyStatus}
         onReanalyze={handleReanalyze}
+        isAnalyzing={isAnalyzing}
         isReanalyzing={isAnalyzing}
       />
     </>
