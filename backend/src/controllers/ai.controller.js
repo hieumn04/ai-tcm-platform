@@ -183,7 +183,7 @@ class AIController {
   }
 
   /**
-   * Save batch of AI generated test cases to database
+   * Save batch of AI generated test cases to database (Optimized Bulk Insert)
    */
   async saveBatchAiTestCases(req, res) {
     const transaction = await this.sequelize.transaction();
@@ -197,61 +197,75 @@ class AIController {
         return ResponseUtil.validationError(res, ['folderId and a non-empty cases array are required']);
       }
 
-      let totalCases = await this.Case.count({ transaction });
-      const createdCases = [];
+      const initialCount = await this.Case.count({ transaction });
 
-      for (let cIdx = 0; cIdx < cases.length; cIdx++) {
-        const caseData = cases[cIdx];
-        totalCases++;
-        const customId = caseData.customId || `TC-AI-${totalCases}`;
+      // 1. Prepare & Bulk Insert Cases
+      const casesToCreate = cases.map((caseData, cIdx) => {
+        const totalNumber = initialCount + cIdx + 1;
+        const customId = caseData.customId || `TC-AI-${totalNumber}`;
         const complexityValue = String(caseData.complexity || '2');
 
-        const newCase = await this.Case.create(
-          {
-            title: caseData.title,
-            description: caseData.description || '',
-            state: 1,
-            priority: typeof caseData.priority === 'number' ? caseData.priority : 1,
-            type: typeof caseData.type === 'number' ? caseData.type : 4,
-            automationStatus: 0,
-            template: Array.isArray(caseData.steps) && caseData.steps.length > 0 ? 1 : 0,
-            preConditions: caseData.preConditions || '',
-            expectedResults: caseData.expectedResults || '',
-            folderId: Number(folderId),
-            isAuto: 'manual',
-            useAI: true,
-            userId: Number(userId),
-            customId,
-            complexity: complexityValue,
-            stepsDetail: caseData.stepsDetail || '',
-          },
-          { transaction }
-        );
+        return {
+          title: caseData.title,
+          description: caseData.description || '',
+          state: 1,
+          priority: typeof caseData.priority === 'number' ? caseData.priority : 1,
+          type: typeof caseData.type === 'number' ? caseData.type : 4,
+          automationStatus: 0,
+          template: Array.isArray(caseData.steps) && caseData.steps.length > 0 ? 1 : 0,
+          preConditions: caseData.preConditions || '',
+          expectedResults: caseData.expectedResults || '',
+          folderId: Number(folderId),
+          isAuto: 'manual',
+          useAI: true,
+          userId: Number(userId),
+          customId,
+          complexity: complexityValue,
+          stepsDetail: caseData.stepsDetail || '',
+        };
+      });
 
+      const createdCases = await this.Case.bulkCreate(casesToCreate, {
+        transaction,
+        returning: true,
+      });
+
+      // 2. Prepare & Bulk Insert Steps
+      const stepsToCreate = [];
+      const caseStepMappings = [];
+
+      createdCases.forEach((newCase, cIdx) => {
+        const caseData = cases[cIdx];
         if (Array.isArray(caseData.steps) && caseData.steps.length > 0) {
-          for (let i = 0; i < caseData.steps.length; i++) {
-            const stepItem = caseData.steps[i];
-            const createdStep = await this.Step.create(
-              {
-                caseId: newCase.id,
-                step: stepItem.step || '',
-                result: stepItem.result || '',
-              },
-              { transaction }
-            );
-
-            await this.CaseStep.create(
-              {
-                caseId: newCase.id,
-                stepId: createdStep.id,
-                stepNo: stepItem.stepNo || i + 1,
-              },
-              { transaction }
-            );
-          }
+          caseData.steps.forEach((stepItem, sIdx) => {
+            stepsToCreate.push({
+              caseId: newCase.id,
+              step: stepItem.step || '',
+              result: stepItem.result || '',
+            });
+            caseStepMappings.push({
+              caseId: newCase.id,
+              stepNo: stepItem.stepNo || sIdx + 1,
+            });
+          });
         }
+      });
 
-        createdCases.push(newCase);
+      if (stepsToCreate.length > 0) {
+        // Bulk create steps
+        const createdSteps = await this.Step.bulkCreate(stepsToCreate, {
+          transaction,
+          returning: true,
+        });
+
+        // 3. Bulk Insert CaseStep Join Table
+        const caseStepsToCreate = createdSteps.map((step, idx) => ({
+          caseId: caseStepMappings[idx].caseId,
+          stepId: step.id,
+          stepNo: caseStepMappings[idx].stepNo,
+        }));
+
+        await this.CaseStep.bulkCreate(caseStepsToCreate, { transaction });
       }
 
       await transaction.commit();
