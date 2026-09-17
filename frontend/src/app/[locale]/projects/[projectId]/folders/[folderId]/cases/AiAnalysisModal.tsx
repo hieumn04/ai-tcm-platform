@@ -53,7 +53,7 @@ export default function AiAnalysisModal({
   if (!analysis && !isLoadingState) return null
 
   const hasBilingual = Boolean(analysis?.vi && analysis?.en)
-  const currentContent = analysis
+  const currentContent: any = analysis
     ? (activeLang === 'vi' && analysis.vi ? analysis.vi : (analysis.en || analysis))
     : {}
 
