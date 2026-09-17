@@ -243,7 +243,7 @@ export default function AiAnalysisModal({
                 variant="flat"
                 onClick={onReanalyze}
                 isLoading={isReanalyzing}
-                startContent={<RefreshCw size={14} />}
+                startContent={!isReanalyzing ? <RefreshCw size={14} /> : undefined}
               >
                 {isVi ? 'Phân tích lại' : 'Re-Analyze'}
               </Button>

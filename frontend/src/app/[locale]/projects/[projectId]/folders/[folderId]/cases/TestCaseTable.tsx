@@ -734,7 +734,7 @@ export default function TestCaseTable({
           {onRefresh && (
             <Button
               startContent={
-                <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+                !loading ? <RefreshCw size={15} /> : undefined
               }
               size="sm"
               variant="flat"
