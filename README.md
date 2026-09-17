@@ -11,22 +11,22 @@ An enterprise-grade Test Case Management (TCM) and Quality Engineering Platform 
 
 ---
 
-## 🌐 Live Demo & Test Credentials
+## Live Demo & Test Credentials
 
 The platform is deployed and live for testing:
 
 - **Frontend Web App**: [https://ai-tcm-platform-weld.vercel.app](https://ai-tcm-platform-weld.vercel.app)
 - **Backend REST API**: [https://ai-tcm-platform-production.up.railway.app](https://ai-tcm-platform-production.up.railway.app)
 
-🔑 **Demo Accounts for Recruiters & Reviewers:**
+**Demo Accounts for Recruiters & Reviewers:**
 
 | Role | Email | Password | Description |
 | :--- | :--- | :--- | :--- |
-| 👑 **Admin / Lead QA** | `admin@example.com` | `password` | Full administrative access & project management |
-| 🧪 **QA Tester 1** | `samuel@example.com` | `password` | Test execution, AI analysis & reporting |
-| 🧪 **QA Tester 2** | `zoe@example.com` | `password` | Real-time multi-user collaboration testing |
+| **Admin / Lead QA** | `admin@example.com` | `password` | Full administrative access & project management |
+| **QA Tester 1** | `samuel@example.com` | `password` | Test execution, AI analysis & reporting |
+| **QA Tester 2** | `zoe@example.com` | `password` | Real-time multi-user collaboration testing |
 
-> 💡 *Note: All demo accounts use the default password `password`.*
+> *Note: All demo accounts use the default password `password`.*
 
 ---
 
