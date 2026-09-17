@@ -48,8 +48,13 @@ async function startServer() {
   try {
     await sequelize.authenticate();
     console.log('Database connection has been established successfully.');
+
+    // Auto-verify/create required JSONB columns on production DB
+    await sequelize.query('ALTER TABLE "cases" ADD COLUMN IF NOT EXISTS "aiAssessment" JSONB;');
+    await sequelize.query('ALTER TABLE "runCases" ADD COLUMN IF NOT EXISTS "aiAssessment" JSONB;');
+    console.log('Database schema check: "aiAssessment" columns verified/added successfully.');
   } catch (error) {
-    console.error('Unable to connect to the database:', error);
+    console.error('Unable to connect or sync database schema:', error);
     process.exit(1);
   }
 
