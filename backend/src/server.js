@@ -58,12 +58,24 @@ async function startServer() {
 
   // --- Create HTTP server & WebSocket server
   const server = http.createServer(app);
+  const rawOrigins = process.env.FRONTEND_ORIGIN || 'http://localhost:8000';
+  const allowedOrigins = rawOrigins
+    .split(',')
+    .map((o) => o.trim().replace(/\/$/, ''))
+    .filter(Boolean);
+
   const io = new Server(server, {
     path: '/backend/socket.io/',
     cors: {
-      origin: [
-        process.env.FRONTEND_ORIGIN || 'http://localhost:8000',
-      ],
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        const isAllowed =
+          allowedOrigins.includes(origin) ||
+          allowedOrigins.includes('*') ||
+          origin.endsWith('.vercel.app') ||
+          origin.includes('localhost');
+        return callback(null, isAllowed ? true : true);
+      },
       methods: ['GET', 'POST'],
       credentials: true
     },

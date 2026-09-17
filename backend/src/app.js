@@ -7,9 +7,26 @@ function createApp(sequelize, webSocketService) {
   const app = express();
 
   // CORS configuration
-  const frontendOrigin = process.env.FRONTEND_ORIGIN || 'http://localhost:8000';
+  const rawOrigins = process.env.FRONTEND_ORIGIN || 'http://localhost:8000';
+  const allowedOrigins = rawOrigins
+    .split(',')
+    .map((o) => o.trim().replace(/\/$/, ''))
+    .filter(Boolean);
+
   const corsOptions = {
-    origin: frontendOrigin,
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      const isAllowed =
+        allowedOrigins.includes(origin) ||
+        allowedOrigins.includes('*') ||
+        origin.endsWith('.vercel.app') ||
+        origin.includes('localhost');
+      if (isAllowed) {
+        return callback(null, true);
+      }
+      return callback(null, true);
+    },
+    credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
   };
   app.use(cors(corsOptions));
