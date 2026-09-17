@@ -7,26 +7,42 @@ require('dotenv').config();
 
 async function startServer() {
   // Database configuration
+  const databaseUrl = process.env.DATABASE_URL;
   const dbName = process.env.DB_NAME;
   const dbUser = process.env.DB_USER;
   const dbHost = process.env.DB_HOST;
   const dbPort = process.env.DB_PORT;
   const dbPassword = process.env.DB_PASSWORD;
 
-  if (!dbName || !dbUser || !dbHost || !dbPort || !dbPassword) {
-    console.error('Please set the environment variables: DB_NAME, DB_USER, DB_HOST, DB_PORT, DB_PASSWORD');
+  const sslOption = (process.env.DB_SSL === 'true' || process.env.NODE_ENV === 'production') ? {
+    require: true,
+    rejectUnauthorized: false
+  } : false;
+
+  let sequelize;
+
+  if (databaseUrl) {
+    sequelize = new Sequelize(databaseUrl, {
+      dialect: 'postgres',
+      dialectOptions: {
+        clientMinMessages: 'ignore',
+        ssl: sslOption
+      }
+    });
+  } else if (dbName && dbUser && dbHost && dbPort && dbPassword) {
+    sequelize = new Sequelize(dbName, dbUser, dbPassword, {
+      host: dbHost,
+      port: parseInt(dbPort, 10),
+      dialect: 'postgres',
+      dialectOptions: {
+        clientMinMessages: 'ignore',
+        ssl: sslOption
+      },
+    });
+  } else {
+    console.error('Please set either DATABASE_URL or environment variables: DB_NAME, DB_USER, DB_HOST, DB_PORT, DB_PASSWORD');
     process.exit(1);
   }
-
-  // Initialize Sequelize
-  const sequelize = new Sequelize(dbName, dbUser, dbPassword, {
-    host: dbHost,
-    port: parseInt(dbPort, 10),
-    dialect: 'postgres',
-    dialectOptions: {
-      clientMinMessages: 'ignore',
-    },
-  });
 
   // Test database connection
   try {

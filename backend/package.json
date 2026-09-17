@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "start": "node --env-file=.env index.js",
+    "start": "node index.js",
     "dev": "nodemon --watch . --ext js,json --ignore node_modules/ index.js",
     "migrate": "bash scripts/migrate.sh",
     "seed": "bash scripts/seed.sh",
