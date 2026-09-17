@@ -219,6 +219,7 @@ function setupRoutes(app, sequelize, webSocketService) {
   // DeepSeek AI routes
   const aiRoute = require('./routes/ai/ai.route')(sequelize, webSocketService);
   app.use('/api/ai', aiRoute);
+  app.use('/ai', aiRoute);
 }
 
 module.exports = createApp;

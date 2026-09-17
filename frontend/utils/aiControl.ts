@@ -87,11 +87,14 @@ export async function streamGenerateTestCasesWithAi(
   signal?: AbortSignal,
 ): Promise<string> {
   // Use direct backend origin to bypass Next.js rewrites proxy buffering SSE
-  const backendBase =
+  const rawBase =
     typeof window !== 'undefined' && process.env.NEXT_PUBLIC_BACKEND_ORIGIN
       ? process.env.NEXT_PUBLIC_BACKEND_ORIGIN
       : apiServer;
-  const url = `${backendBase}/ai/generate-stream`;
+  const cleanBase = rawBase.replace(/\/+$/, '');
+  const url = cleanBase.endsWith('/api')
+    ? `${cleanBase}/ai/generate-stream`
+    : `${cleanBase}/api/ai/generate-stream`;
 
   const response = await fetch(url, {
     method: 'POST',
