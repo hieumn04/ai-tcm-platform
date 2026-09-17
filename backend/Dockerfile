@@ -7,6 +7,7 @@ RUN npm ci
 
 COPY . .
 
-EXPOSE $PORT
-RUN npx sequelize db:migrate
+EXPOSE 8001
+
+CMD ["npm", "start"]
 
